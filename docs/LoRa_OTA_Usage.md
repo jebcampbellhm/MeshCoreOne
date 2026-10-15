@@ -74,3 +74,18 @@ the workflow and attempts cleanup. A killed app or lost Bluetooth connection
 cannot guarantee cleanup; wait for the radio windows to expire. This first
 version supports a direct companion-to-repeater link, not automated relay radio
 changes or resume after app restart. Hardware validation is still required.
+
+## Software validation
+
+[Validation run 38782615394](https://github.com/jebcampbellhm/MeshCoreOne/actions/runs/38782615394)
+passed for commit `479c8fa4`: both Swift package test suites and the hosted iOS
+simulator compatibility build. The unchanged application/service implementation
+also passed 500 MeshCore tests and 2,144 MC1Services tests in the preceding run.
+New workflow tests cover command order, catalog pagination, lost acknowledgements,
+SD and installation-policy rejection, source failure, mismatched download IDs,
+receiver failure, and cancellation cleanup.
+
+The hosted runner has Xcode 26.6, while upstream uses an iOS 27-only
+`swipeActionsContainer` API. For the compatibility build only, CI substitutes
+that existing helper's older-OS fallback in its temporary checkout. OTA source
+is unchanged. This is not a full Xcode 27 validation or a hardware transfer test.
