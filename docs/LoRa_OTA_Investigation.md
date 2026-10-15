@@ -9,6 +9,8 @@ Implemented in `MeshCore/Sources/MeshCore/OTA`, `MeshCoreSession+OTA.swift`, and
 
 - Strict signed format-2 full-application verification, including geometry, leaves, mountain-range Merkle root, SHA-256 image hash, Ed25519 signature, unapproved distribution marker, and optional MeshTower V2 embedded EndF identity validation.
 - A single immutable firmware catalog implementing COUNT, DESCRIBE, and bounded READ. No delta, bootloader, or compression capability is advertised.
+  This original application-only milestone is superseded by the three-package
+  extension below; compression remains unadvertised.
 - Typed companion local control and source status/start/stop commands, retaining complete OTA response payloads and accepting legacy/current status formats.
 - On-demand discovery and subscription of the companion's separate mOTA GATT service, bounded request queue, MTU-sized acknowledged writes, ordered response fragments, and disconnect cleanup.
 - A source lifecycle API which starts answering requests before requesting catalog attachment and releases ownership when stopped or failed.
@@ -27,6 +29,17 @@ Not yet implemented: persistent recovery journal, restart/resume UI, installatio
 or post-reboot verification. This version is direct-link and foreground-only. No
 hardware transfer or installation has been performed. The later sections retain
 the wider investigation and roadmap; they do not imply every item is implemented.
+
+### Three-package extension
+
+The importer and catalog now distinguish signed full applications, in-place
+application deltas, and exact MeshTower V2 SD format-3 bootloaders. Seeder descriptors
+carry each package's real codec and flags. Delta preflight checks the running base
+hash; bootloader preflight checks the separate live boot identity and SD self-update
+capabilities, then verifies exact staged MID/hash before reporting completion.
+All three paths stage only. See the [usage guide](LoRa_OTA_Usage.md) for build/sign
+commands and an explicit comparison with the Python runner, including unported
+radio rehearsal and recovery features.
 
 ### Foundation API for bench integration
 

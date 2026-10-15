@@ -28,11 +28,12 @@ extension MotaContainer {
     }
     // Reject ambiguous markers, even if another marker's CRC/fields are invalid.
     let identity = 0x9FB4
+    let name = Array("TOWER_V2_OTA".utf8)
     guard marker("BLMFCRC1", length: 44) == [identity],
           u16(identity + 8) == 1, u16(identity + 10) == 44,
           u32(identity + 12) == 0xF4000, u32(identity + 16) == 40960,
           u32(identity + 20) == 0x239A0071,
-          Array(image[(identity + 24)..<(identity + 40)]) == Array("TOWER_V2_OTA".utf8) + Array(repeating: 0, count: 5) else {
+          Array(image[(identity + 24)..<(identity + 40)]) == name + Array(repeating: 0, count: 16 - name.count) else {
       throw MotaError.invalidContainer("Invalid embedded bootloader identity")
     }
     let crcOffset = identity + 40
