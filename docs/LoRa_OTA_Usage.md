@@ -59,7 +59,8 @@ downloads. It does not change trusted keys or installation policy.
    in the paginated `ota ls` catalog.
 7. Send `ota pull MANIFEST_ID flash`. On this firmware, `flash` selects the
    configured staging backend, which preflight required to be SD.
-8. Poll `ota status` until the selected ID is ready, then stop serving and request
+8. Poll compact `ota stats` until the selected download ID is done (the longer
+   `ota status` can truncate the ID), then stop serving and request
    `normalradio` on the repeater followed by the companion.
 
 Radio changes and pulls are sent once. Lost acknowledgements trigger observation,

@@ -73,6 +73,11 @@ public struct LoRaOTAWorkflow: Sendable {
       guard status.contains("no download") else {
         throw LoRaOTAError.message("Repeater already has a download. Resolve it in the terminal before starting another.")
       }
+      let maxBlock = status.components(separatedBy: "maxblk:").dropFirst().first?
+        .prefix(while: { $0.isNumber })
+      guard let maxBlock, let capacity = Int(maxBlock), container.blockSize <= capacity else {
+        throw LoRaOTAError.message("Repeater does not support this firmware package's block size.")
+      }
       let storage = try await ops.remote("ota storage")
       guard storage.contains("SD staging;") else {
         throw LoRaOTAError.message("Full updates require mounted SD staging and a compatible OTAFIX bootloader. \(storage)")
@@ -104,6 +109,7 @@ public struct LoRaOTAWorkflow: Sendable {
       for _ in 0..<12 {
         try Task.checkCancellation()
         for page in 1...16 {
+          guard ContinuousClock.now < deadline else { throw LoRaOTAError.message("Temporary radio window ended during discovery.") }
           let catalog = try await ops.remote("ota ls \(page)")
           if catalog.uppercased().contains(mid) { advertised = true; break }
           if catalog.contains("out of range") || catalog.contains("No updates") { break }
@@ -119,15 +125,18 @@ public struct LoRaOTAWorkflow: Sendable {
       }
       while true {
         try Task.checkCancellation()
+        guard ContinuousClock.now < deadline else { throw LoRaOTAError.message("Transfer window ended before completion.") }
         if let failure = await ops.sourceFailure() { throw LoRaOTAError.message(failure) }
-        let state = try await ops.remote("ota status")
+        // `ota status` truncates the download ID at 160 bytes on MeshTower.
+        // The compact stats response puts it earlier; ignore the running firmware ID.
+        let state = try await ops.remote("ota stats")
         await progress(state)
-        guard state.uppercased().contains("ID=\(mid)") else {
+        let fetch = state.components(separatedBy: " | ").first { $0.hasPrefix("fetch ") } ?? ""
+        guard fetch.uppercased().contains("ID=\(mid)") else {
           throw LoRaOTAError.message("Repeater did not confirm the selected download. \(state)")
         }
-        if state.contains("ready to install") { break }
-        if state.contains("failed") { throw LoRaOTAError.message(state) }
-        guard ContinuousClock.now < deadline else { throw LoRaOTAError.message("Transfer window ended before completion.") }
+        if fetch.hasPrefix("fetch done ") { break }
+        if fetch.hasPrefix("fetch failed") { throw LoRaOTAError.message(state) }
         try await ops.pause()
       }
     } catch { outcome = error }
