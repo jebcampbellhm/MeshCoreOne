@@ -7,10 +7,8 @@ and first foreground repeater transfer screen are implemented. Hardware validati
 
 Implemented in `MeshCore/Sources/MeshCore/OTA`, `MeshCoreSession+OTA.swift`, and the MC1Services BLE transport:
 
-- Strict signed format-2 full-application verification, including geometry, leaves, mountain-range Merkle root, SHA-256 image hash, Ed25519 signature, unapproved distribution marker, and optional MeshTower V2 embedded EndF identity validation.
-- A single immutable firmware catalog implementing COUNT, DESCRIBE, and bounded READ. No delta, bootloader, or compression capability is advertised.
-  This original application-only milestone is superseded by the three-package
-  extension below; compression remains unadvertised.
+- Strict signed full, delta, and MeshTower SD bootloader verification, including geometry, leaves, mountain-range Merkle root, Ed25519 signature, and unapproved distribution marker. Full and bootloader image hashes are checked locally; delta result hashes are checked by the receiver against the reconstructed image. See the package-specific checks below.
+- A single immutable firmware catalog implementing COUNT, DESCRIBE, and bounded READ with the selected package's actual codec and flags. Compression remains unadvertised.
 - Typed companion local control and source status/start/stop commands, retaining complete OTA response payloads and accepting legacy/current status formats.
 - On-demand discovery and subscription of the companion's separate mOTA GATT service, bounded request queue, MTU-sized acknowledged writes, ordered response fragments, and disconnect cleanup.
 - A source lifecycle API which starts answering requests before requesting catalog attachment and releases ownership when stopped or failed.
@@ -21,7 +19,7 @@ The Python reference check passes against the pinned upstream BLE seeder, includ
 The repeater settings now include signed Files import and temporary-radio options.
 `LoRaOTAWorkflow` authenticates, checks target/block geometry/SD/installation policy,
 moves the repeater and companion, starts seeding, authenticates again, discovers
-the selected manifest and requests a full pull. It monitors compact download stats
+the selected manifest and requests its pull. It monitors compact download stats
 and attempts radio restoration on completion, failure, or cancellation. Mutation
 commands bypass automatic path recovery retries. See [usage and signing commands](LoRa_OTA_Usage.md).
 

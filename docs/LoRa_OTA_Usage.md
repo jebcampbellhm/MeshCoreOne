@@ -148,6 +148,21 @@ cannot guarantee cleanup; wait for the radio windows to expire. This first
 version supports a direct companion-to-repeater link, not automated relay radio
 changes or resume after app restart. Hardware validation is still required.
 
+## Three-package software validation
+
+[Validation run 38788407077](https://github.com/jebcampbellhm/MeshCoreOne/actions/runs/38788407077)
+passed for implementation commit `370df4e1`: 504 MeshCore tests across 58 suites,
+2,146 MC1Services tests across 176 suites, and the hosted iOS simulator
+compatibility build. Tests cover all three signed package families, complete
+Bluetooth file readback, command ordering, read timeouts, delta base mismatches,
+bootloader profile mismatches, and exact staged bootloader ID/hash confirmation.
+
+The pinned upstream Python validator and Rust motatool both accepted the full,
+delta, and bootloader fixtures. Python also reconstructed the delta with detools
+and matched the expected image; the upstream Bluetooth seeder matched each
+descriptor and complete file readback. Fixtures are synthetic test images,
+not firmware to flash. Physical transfer and installation remain untested.
+
 ## Previous software validation (application-only milestone)
 
 [Validation run 38782615394](https://github.com/jebcampbellhm/MeshCoreOne/actions/runs/38782615394)
