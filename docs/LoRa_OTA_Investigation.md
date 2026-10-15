@@ -1,6 +1,7 @@
 # LoRa OTA over Bluetooth: investigation and implementation plan
 
-Investigated 2026-10-15. The protocol/seeder foundation and optional Bluetooth channel are now implemented. The end-user repeater update workflow and hardware validation remain pending.
+Investigated 2026-10-15. The protocol/seeder foundation, optional Bluetooth channel,
+and first foreground repeater transfer screen are implemented. Hardware validation remains pending.
 
 ## Implementation status
 
@@ -15,7 +16,17 @@ Implemented in `MeshCore/Sources/MeshCore/OTA`, `MeshCoreSession+OTA.swift`, and
 
 The Python reference check passes against the pinned upstream BLE seeder, including descriptor comparison (with compression capability intentionally disabled), complete file readback, invalid request checks, and positive/negative OpenSSL signature verification. The [macOS validation run](https://github.com/jebcampbellhm/MeshCoreOne/actions/runs/38762705735) passed on implementation commit `b55d4d61c9705b62778475b06d9737110739f992`: 500 MeshCore tests across 57 suites and 2,141 MC1Services tests across 175 suites. The initial CI run caught an inaccessible serializer initializer; the tested commit fixes its access level. The local Windows workspace has no Swift/Xcode toolchain.
 
-Not yet implemented: Files import/UI, target preflight and remote transfer coordinator, temporary-radio orchestration, persistent recovery journal, installation UI, or post-reboot verification. No hardware transfer or installation has been performed. The new API does not itself change radio settings, log into a repeater, start a remote pull, or install firmware.
+The repeater settings now include signed Files import and temporary-radio options.
+`LoRaOTAWorkflow` authenticates, checks target/block geometry/SD/installation policy,
+moves the repeater and companion, starts seeding, authenticates again, discovers
+the selected manifest and requests a full pull. It monitors compact download stats
+and attempts radio restoration on completion, failure, or cancellation. Mutation
+commands bypass automatic path recovery retries. See [usage and signing commands](LoRa_OTA_Usage.md).
+
+Not yet implemented: persistent recovery journal, restart/resume UI, installation UI,
+or post-reboot verification. This version is direct-link and foreground-only. No
+hardware transfer or installation has been performed. The later sections retain
+the wider investigation and roadmap; they do not imply every item is implemented.
 
 ### Foundation API for bench integration
 

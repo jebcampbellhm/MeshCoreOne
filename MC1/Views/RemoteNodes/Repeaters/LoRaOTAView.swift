@@ -107,6 +107,10 @@ struct LoRaOTAView: View {
 
   private func start() {
     guard let container, let services = appState.services else { message = "Connect the companion first."; return }
+    guard appState.connectedDevice?.radioID == session.radioID else {
+      message = "Reconnect the companion used for this repeater session."
+      return
+    }
     do {
       let radio = try OTATemporaryRadio(frequencyMHz: Double(frequency.replacingOccurrences(of: ",", with: ".")) ?? .nan,
         bandwidthKHz: bandwidth, spreadingFactor: spreadingFactor, codingRate: codingRate, minutes: minutes)
