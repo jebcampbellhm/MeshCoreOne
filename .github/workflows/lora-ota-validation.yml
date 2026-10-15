@@ -13,6 +13,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  reference-packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v6
+        with:
+          repository: mikecarper/MeshCore
+          ref: 656cb6924f01acaa1285c75aa3eda1e0151bcb80
+          path: reference-meshcore
+      - uses: actions/checkout@v6
+        with:
+          repository: mikecarper/motatool
+          ref: 5d9646cb08105245fb96c28450669c58763224bb
+          path: reference-motatool
+      - name: Install reference validators
+        run: python -m pip install cryptography detools==0.53.0
+      - name: Check reproducible packages and Python wire compatibility
+        run: |
+          python ci/generate_mota_packages.py
+          git diff --exit-code -- MeshCore/Tests/MeshCoreTestSupport/Fixtures
+          python ci/check_mota_packages.py --repository reference-meshcore
+      - name: Verify packages with Rust motatool
+        run: cargo run --release --locked --manifest-path reference-motatool/Cargo.toml -- verify MeshCore/Tests/MeshCoreTestSupport/Fixtures/*.mota
   ios-build:
     runs-on: macos-latest
     timeout-minutes: 35

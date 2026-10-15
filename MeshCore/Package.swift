@@ -26,7 +26,8 @@ let package = Package(
     ),
     .target(
       name: "MeshCoreTestSupport",
-      path: "Tests/MeshCoreTestSupport"
+      path: "Tests/MeshCoreTestSupport",
+      resources: [.copy("Fixtures")]
     ),
     .testTarget(
       name: "MeshCoreTests",

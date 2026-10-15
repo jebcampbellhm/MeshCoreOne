@@ -30,6 +30,7 @@ public enum LoRaOTAError: Error, LocalizedError, Sendable {
 /// A single, foreground, direct-link transfer. Does not install or alter trust policy.
 public struct LoRaOTAWorkflow: Sendable {
   public struct Operations: Sendable {
+    public var prepare: @Sendable () async throws -> Void
     public var login: @Sendable () async throws -> Void
     public var remote: @Sendable (String) async throws -> String
     public var local: @Sendable (String) async throws -> String
@@ -38,14 +39,15 @@ public struct LoRaOTAWorkflow: Sendable {
     public var sourceFailure: @Sendable () async -> String?
     public var pause: @Sendable () async throws -> Void
 
-    public init(login: @escaping @Sendable () async throws -> Void,
+    public init(prepare: @escaping @Sendable () async throws -> Void = {},
+                login: @escaping @Sendable () async throws -> Void,
                 remote: @escaping @Sendable (String) async throws -> String,
                 local: @escaping @Sendable (String) async throws -> String,
                 startSource: @escaping @Sendable (MotaContainer) async throws -> Void,
                 stopSource: @escaping @Sendable () async -> Void,
                 sourceFailure: @escaping @Sendable () async -> String? = { nil },
                 pause: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) }) {
-      self.login = login; self.remote = remote; self.local = local
+      self.prepare = prepare; self.login = login; self.remote = remote; self.local = local
       self.startSource = startSource; self.stopSource = stopSource
       self.sourceFailure = sourceFailure; self.pause = pause
     }
@@ -64,27 +66,23 @@ public struct LoRaOTAWorkflow: Sendable {
     var outcome: (any Error)?
     var deadline = ContinuousClock.now
     do {
+      await progress("Checking companion")
+      try await ops.prepare()
       await progress("Logging into repeater")
       try await ops.login()
-      let status = try await ops.remote("ota status")
-      guard status.contains("hw=Heltec_tower_v2"), status.uppercased().contains("TARGET:0A9DBBF0") else {
-        throw LoRaOTAError.message("Repeater does not report the required MeshTower V2 OTA target.")
-      }
+      let status = try await query("ota status")
       guard status.contains("no download") else {
         throw LoRaOTAError.message("Repeater already has a download. Resolve it in the terminal before starting another.")
       }
-      let maxBlock = status.components(separatedBy: "maxblk:").dropFirst().first?
-        .prefix(while: { $0.isNumber })
-      guard let maxBlock, let capacity = Int(maxBlock), container.blockSize <= capacity else {
-        throw LoRaOTAError.message("Repeater does not support this firmware package's block size.")
+      let identity = try await query("ota self")
+      let storage = try await query("ota storage")
+      try OTAPackageCompatibility.validate(container, status: status, identity: identity, storage: storage)
+      if container.kind == .bootloader {
+        try OTAPackageCompatibility.validateBootloader(container, reply: try await query("ota bootloader status"), ready: false)
       }
-      let storage = try await ops.remote("ota storage")
-      guard storage.contains("SD staging;") else {
-        throw LoRaOTAError.message("Full updates require mounted SD staging and a compatible OTAFIX bootloader. \(storage)")
-      }
-      let config = try await ops.remote("ota config")
-      guard config.contains("autoinstall=off") else {
-        throw LoRaOTAError.message("Set ota config autoinstall off before using this transfer-only screen.")
+      let config = try await query("ota config")
+      guard config.contains("autoinstall=off"), config.contains("autofetch=off") else {
+        throw LoRaOTAError.message("Set ota config autoinstall off and ota config autofetch off before using this transfer-only screen.")
       }
       try Task.checkCancellation()
       await progress("Moving repeater to temporary radio")
@@ -104,13 +102,17 @@ public struct LoRaOTAWorkflow: Sendable {
       sourceStarted = true
       await progress("Logging into repeater on temporary radio")
       try await ops.login()
+      // Recheck the delta base and capabilities after the channel change, before
+      // seeding can result in a pull. A reboot/other updater may have changed them.
+      try OTAPackageCompatibility.validate(container, status: try await query("ota status"),
+        identity: try await query("ota self"), storage: try await query("ota storage"))
       // Wait for advertisements; never guess the catalog's numeric index.
       var advertised = false
       for _ in 0..<12 {
         try Task.checkCancellation()
         for page in 1...16 {
           guard ContinuousClock.now < deadline else { throw LoRaOTAError.message("Temporary radio window ended during discovery.") }
-          let catalog = try await ops.remote("ota ls \(page)")
+          let catalog = try await query("ota ls \(page)")
           if catalog.uppercased().contains(mid) { advertised = true; break }
           if catalog.contains("out of range") || catalog.contains("No updates") { break }
         }
@@ -118,18 +120,25 @@ public struct LoRaOTAWorkflow: Sendable {
         try await ops.pause()
       }
       guard advertised else { throw LoRaOTAError.message("Repeater has not advertised this file in its catalog. No pull was sent.") }
-      await progress("Requesting full update \(mid)")
+      // No automatic replacement of a download that appeared during discovery.
+      guard try await query("ota status").contains("no download") else {
+        throw LoRaOTAError.message("Another download appeared during preparation. No pull was sent.")
+      }
+      await progress("Requesting \(container.kind.rawValue.lowercased()) \(mid)")
       do { try Self.requireOK(try await ops.remote("ota pull \(mid) flash")) }
       catch RemoteNodeError.timeout {
         await progress("Pull acknowledgement lost; checking download status without resending")
       }
       while true {
+        // Leave airtime for the actual transfer. Local Bluetooth service continues
+        // answering requests during this quiet interval; reads can safely retry.
+        for _ in 0..<6 { try await ops.pause() }
         try Task.checkCancellation()
         guard ContinuousClock.now < deadline else { throw LoRaOTAError.message("Transfer window ended before completion.") }
         if let failure = await ops.sourceFailure() { throw LoRaOTAError.message(failure) }
         // `ota status` truncates the download ID at 160 bytes on MeshTower.
         // The compact stats response puts it earlier; ignore the running firmware ID.
-        let state = try await ops.remote("ota stats")
+        let state = try await query("ota stats")
         await progress(state)
         let fetch = state.components(separatedBy: " | ").first { $0.hasPrefix("fetch ") } ?? ""
         guard fetch.uppercased().contains("ID=\(mid)") else {
@@ -137,7 +146,9 @@ public struct LoRaOTAWorkflow: Sendable {
         }
         if fetch.hasPrefix("fetch done ") { break }
         if fetch.hasPrefix("fetch failed") { throw LoRaOTAError.message(state) }
-        try await ops.pause()
+      }
+      if container.kind == .bootloader {
+        try OTAPackageCompatibility.validateBootloader(container, reply: try await query("ota bootloader status"), ready: true)
       }
     } catch { outcome = error }
     // Cleanup must still run when the screen's task was cancelled.
@@ -160,7 +171,27 @@ public struct LoRaOTAWorkflow: Sendable {
     if let outcome {
       throw LoRaOTAError.message("\(outcome.localizedDescription) \(cleanup)")
     }
-    await progress("File ready on repeater SD card. \(cleanup)")
+    let instruction: String
+    if container.kind == .bootloader {
+      let hash = container.imageHash.prefix(8).map { String(format: "%02X", $0) }.joined()
+      instruction = "Bootloader staged and exact ID/hash confirmed. After reviewing ota bootloader status, the separate install command is: ota bootloader install \(mid) \(hash)."
+    } else {
+      instruction = "\(container.kind.rawValue) ready on repeater SD card. Installation is separate."
+    }
+    await progress("\(instruction) \(cleanup)")
+  }
+
+  /// Only read operations enter this retry path. Mutations always remain one-shot.
+  private func query(_ command: String) async throws -> String {
+    for attempt in 0..<3 {
+      try Task.checkCancellation()
+      do { return try await ops.remote(command) }
+      catch RemoteNodeError.timeout {
+        if attempt == 2 { throw RemoteNodeError.timeout }
+        try await ops.pause()
+      }
+    }
+    throw RemoteNodeError.timeout
   }
 
   private static func requireOK(_ reply: String) throws {
@@ -173,6 +204,16 @@ public extension LoRaOTAWorkflow {
                         sessionID: UUID, password: String?) -> LoRaOTAWorkflow {
     let source = OTASourceHolder()
     return LoRaOTAWorkflow(operations: Operations(
+      prepare: {
+        let state = try await session.executeLocalOTAControl("tempradio")
+        guard state.lowercased().hasPrefix("tempradio inactive") else {
+          throw LoRaOTAError.message("Finish the companion's existing temporary radio session before starting this transfer.")
+        }
+        let time = try await session.getTime()
+        guard abs(time.timeIntervalSinceNow) <= 600 else {
+          throw LoRaOTAError.message("Companion clock differs from the phone by more than ten minutes. Synchronize it before OTA to avoid rejected admin packets.")
+        }
+      },
       login: {
         let result = try await remote.login(sessionID: sessionID, password: password)
         guard result.isAdmin else { throw LoRaOTAError.message("Repeater administrator login required.") }

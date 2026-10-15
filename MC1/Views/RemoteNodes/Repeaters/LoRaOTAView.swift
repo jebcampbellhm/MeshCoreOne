@@ -20,7 +20,7 @@ struct LoRaOTAView: View {
   @State private var minutes = 120
   @State private var password = ""
   @State private var directLink = false
-  @State private var message = "Select a signed full application update."
+  @State private var message = "Select a signed full, delta, or bootloader .mota for MeshTower V2 SD."
   @State private var transfer: Task<Void, Never>?
 
   var body: some View {
@@ -31,11 +31,22 @@ struct LoRaOTAView: View {
             .disabled(loading || transfer != nil)
           if let container {
             Text(filename)
+            LabeledContent("Package", value: container.kind.rawValue)
             LabeledContent("Hardware", value: container.hardwareID)
             LabeledContent("Version", value: String(container.firmwareVersion))
             LabeledContent("Size", value: ByteCountFormatter.string(fromByteCount: Int64(container.bytes.count), countStyle: .file))
             Text("Signature and file integrity verified. The repeater must already trust this signing key.")
               .font(.footnote)
+            if container.kind == .deltaApplication {
+              Text("The running firmware must match this delta's base. The repeater verifies the reconstructed image during application.")
+                .font(.footnote)
+              Text("Base: " + container.baseHash.map { String(format: "%02X", $0) }.joined())
+                .font(.caption.monospaced()).textSelection(.enabled)
+            }
+            if container.kind == .bootloader {
+              Text("SD bootloader update: requires an already compatible self-update bootloader. This screen stages it and reports the separate install command after exact ID/hash verification.")
+                .font(.footnote)
+            }
             Text("Signer: " + container.signer.map { String(format: "%02x", $0) }.joined())
               .font(.caption.monospaced()).textSelection(.enabled)
           }
