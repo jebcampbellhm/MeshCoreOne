@@ -13,6 +13,9 @@ import os
 /// through one serializer guarantees a single request/response is outstanding at a
 /// time, which is the only structural defense given the learned (not precomputed) ack.
 public actor RequestResponseSerializer {
+  /// Creates an independent serializer, also usable by platform transports.
+  public init() {}
+
   private var isRequestInFlight = false
   private var waiters: [CheckedContinuation<Void, Never>] = []
 
