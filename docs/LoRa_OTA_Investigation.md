@@ -1,6 +1,35 @@
 # LoRa OTA over Bluetooth: investigation and implementation plan
 
-Investigated 2026-10-15. This is a source review, not a hardware validation or implemented feature.
+Investigated 2026-10-15. The protocol/seeder foundation and optional Bluetooth channel are now implemented. The end-user repeater update workflow and hardware validation remain pending.
+
+## Implementation status
+
+Implemented in `MeshCore/Sources/MeshCore/OTA`, `MeshCoreSession+OTA.swift`, and the MC1Services BLE transport:
+
+- Strict signed format-2 full-application verification, including geometry, leaves, mountain-range Merkle root, SHA-256 image hash, Ed25519 signature, unapproved distribution marker, and optional MeshTower V2 embedded EndF identity validation.
+- A single immutable firmware catalog implementing COUNT, DESCRIBE, and bounded READ. No delta, bootloader, or compression capability is advertised.
+- Typed companion local control and source status/start/stop commands, retaining complete OTA response payloads and accepting legacy/current status formats.
+- On-demand discovery and subscription of the companion's separate mOTA GATT service, bounded request queue, MTU-sized acknowledged writes, ordered response fragments, and disconnect cleanup.
+- A source lifecycle API which starts answering requests before requesting catalog attachment and releases ownership when stopped or failed.
+- Signed reference fixtures, corruption/bounds/protocol/session tests, and a macOS GitHub Actions job running both Swift package test suites.
+
+The Python reference check passes against the pinned upstream BLE seeder, including descriptor comparison (with compression capability intentionally disabled), complete file readback, invalid request checks, and positive/negative OpenSSL signature verification. The [macOS validation run](https://github.com/jebcampbellhm/MeshCoreOne/actions/runs/38762705735) passed on implementation commit `b55d4d61c9705b62778475b06d9737110739f992`: 500 MeshCore tests across 57 suites and 2,141 MC1Services tests across 175 suites. The initial CI run caught an inaccessible serializer initializer; the tested commit fixes its access level. The local Windows workspace has no Swift/Xcode toolchain.
+
+Not yet implemented: Files import/UI, target preflight and remote transfer coordinator, temporary-radio orchestration, persistent recovery journal, installation UI, or post-reboot verification. No hardware transfer or installation has been performed. The new API does not itself change radio settings, log into a repeater, start a remote pull, or install firmware.
+
+### Foundation API for bench integration
+
+```swift
+// Validate off the UI thread; the receiver still enforces signer trust.
+let image = try MotaContainer(data: fileData)
+try image.validateMeshTowerV2()
+let source = try await session.startMotaSource(container: image)
+// Keep the source alive while the companion serves requests over LoRa.
+// Remote administration and temporary-radio coordination belong to the next stage.
+await source.stop()
+```
+
+This is developer integration guidance, not a complete update procedure. Do not expose installation until the staged-transfer milestone has passed on the chosen companion and SD-equipped MeshTower.
 
 ## Conclusion
 
@@ -70,7 +99,7 @@ The reference runner handles substantially more than login and starting motatool
 
 **Stage 4 — installation:** add explicit install and post-reboot checks, then hardware-test lost acknowledgments, failed reboot verification, and cleanup failures. Add compression only after the baseline works; cache deterministic compressed blocks off the Bluetooth callback path so each slice belongs to the same stream.
 
-Swift/Xcode builds, simulator tests, and physical radio tests were not run during this investigation. iOS validation requires a Mac with the repository's documented Xcode toolchain. No application code, firmware, or radio settings were changed.
+The initial investigation did not run builds or radio tests. Subsequent implementation is validated by the fork's macOS package-test workflow; simulator/app builds and physical radio validation remain separate acceptance gates. No radio settings or firmware have been changed on hardware.
 
 ## Implementation plan for the confirmed hardware
 
