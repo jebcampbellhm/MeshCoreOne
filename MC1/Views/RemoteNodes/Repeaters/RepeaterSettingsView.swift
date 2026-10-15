@@ -15,6 +15,7 @@ struct RepeaterSettingsView: View {
   @State private var cliViewModel = NodeCLIViewModel()
   @State private var showRebootConfirmation = false
   @State private var showingLocationPicker = false
+  @State private var showingLoRaOTA = false
   @State private var addRegionParent: RepeaterRegionEntry.Parent?
   @State private var telemetryConfigured = false
   @State private var contacts: [ContactDTO] = []
@@ -107,6 +108,7 @@ struct RepeaterSettingsView: View {
     } message: {
       Text(viewModel.helper.successMessage ?? L10n.RemoteNodes.RemoteNodes.Settings.settingsApplied)
     }
+    .sheet(isPresented: $showingLoRaOTA) { LoRaOTAView(session: session) }
     .sheet(isPresented: $showingLocationPicker) {
       LocationPickerView(
         initialCoordinate: CLLocationCoordinate2D(
@@ -143,6 +145,11 @@ struct RepeaterSettingsView: View {
       makeSecuritySection()
       makeDeviceInfoSection()
       makeActionsSection()
+      if session.isAdmin {
+        Section("Firmware") {
+          Button("LoRa firmware transfer") { showingLoRaOTA = true }
+        }
+      }
       if let routeContact {
         NodeRoutePathSection(
           contact: routeContact,

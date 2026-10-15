@@ -57,7 +57,8 @@ extension RemoteNodeService {
     sessionID: UUID,
     command: String,
     timeout: Duration,
-    acceptsAnyResponse: Bool
+    acceptsAnyResponse: Bool,
+    allowRecovery: Bool = true
   ) async throws -> String {
     guard let remoteSession = try await dataStore.fetchRemoteNodeSession(id: sessionID) else {
       throw RemoteNodeError.sessionNotFound
@@ -79,7 +80,7 @@ extension RemoteNodeService {
     defer { releaseCLISlot(for: destinationPrefix) }
 
     // Reboot has no reply; path-reset+resend would fire a second reboot.
-    if Self.isFireAndForgetCLI(command) {
+    if !allowRecovery || Self.isFireAndForgetCLI(command) {
       return try await performCLIExchange(
         publicKey: remoteSession.publicKey,
         destinationPrefix: destinationPrefix,
@@ -104,6 +105,15 @@ extension RemoteNodeService {
         requestID: requestID
       )
     }
+  }
+
+  /// OTA mutations must never be replayed after an ambiguous radio timeout.
+  public func sendOTACommand(sessionID: UUID, command: String) async throws -> String {
+    guard command.hasPrefix("ota ") || command.hasPrefix("tempradio ") || command == "normalradio" else {
+      throw RemoteNodeError.permissionDenied
+    }
+    return try await performCLICommand(sessionID: sessionID, command: command,
+      timeout: .seconds(20), acceptsAnyResponse: true, allowRecovery: false)
   }
 
   /// Commands that intentionally get no reply (or treat timeout as success).

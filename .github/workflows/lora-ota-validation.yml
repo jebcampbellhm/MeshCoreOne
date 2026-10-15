@@ -13,6 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ios-build:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install project tools
+        run: brew install xcodegen swiftgen
+      - name: Generate project
+        run: |
+          printf 'settings:\n  base:\n    DEVELOPMENT_TEAM: ""\n' > dev.yml
+          xcodegen generate
+      - name: Build iOS simulator app
+        run: xcodebuild build -project MC1.xcodeproj -scheme MC1 -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
   swift-tests:
     runs-on: macos-latest
     timeout-minutes: 25
