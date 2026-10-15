@@ -168,6 +168,7 @@ extension MeshCoreSession {
       let (subscriptionID, events) = await dispatcher.subscribeTracked()
 
       do {
+        await prepareOTAReply(for: data.first)
         // Send after subscribing
         try await transport.send(data)
 
@@ -195,6 +196,7 @@ extension MeshCoreSession {
             if let result = try await group.next() ?? nil {
               group.cancelAll()
               await dispatcher.finishSubscription(id: subscriptionID)
+              await prepareOTAReply(for: nil)
               return result
             }
             group.cancelAll()
@@ -207,6 +209,7 @@ extension MeshCoreSession {
           }
         }
       } catch {
+        await prepareOTAReply(for: nil)
         await dispatcher.finishSubscription(id: subscriptionID)
         throw error
       }

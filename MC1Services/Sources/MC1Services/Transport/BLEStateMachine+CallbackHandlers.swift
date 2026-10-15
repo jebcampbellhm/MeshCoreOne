@@ -459,6 +459,7 @@ extension BLEStateMachine {
   }
 
   func handleDidDiscoverServices(_ peripheral: CBPeripheral, error: Error?) {
+    if handleMotaServices(peripheral, error: error) { return }
     let serviceCount = peripheral.services?.count ?? 0
     let hasNordicUART = peripheral.services?.contains { $0.uuid == nordicUARTServiceUUID } ?? false
     logger.info("[BLE] Did discover services: \(peripheral.identifier.uuidString.prefix(8)), count: \(serviceCount), hasNordicUART: \(hasNordicUART), error: \(error?.localizedDescription ?? "none")")
@@ -515,6 +516,7 @@ extension BLEStateMachine {
   }
 
   func handleDidDiscoverCharacteristics(_ peripheral: CBPeripheral, service: CBService, error: Error?) {
+    if handleMotaCharacteristics(peripheral, service: service, error: error) { return }
     let characteristics = service.characteristics ?? []
     let hasTX = characteristics.contains { $0.uuid == txCharacteristicUUID }
     let hasRX = characteristics.contains { $0.uuid == rxCharacteristicUUID }
@@ -584,6 +586,7 @@ extension BLEStateMachine {
   }
 
   func handleDidUpdateNotificationState(_ peripheral: CBPeripheral, characteristic: CBCharacteristic, error: Error?) {
+    if handleMotaSubscription(peripheral, characteristic: characteristic, error: error) { return }
     logger.info("[BLE] Did update notification state: \(peripheral.identifier.uuidString.prefix(8)), isNotifying: \(characteristic.isNotifying), charUUID: \(characteristic.uuid.uuidString.prefix(8)), error: \(error?.localizedDescription ?? "none")")
 
     guard case let .subscribingToNotifications(expected, tx, rx, continuation) = phase,

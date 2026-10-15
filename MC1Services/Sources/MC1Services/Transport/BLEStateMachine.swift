@@ -2,6 +2,7 @@
 @preconcurrency import CoreBluetooth
 import Dispatch
 import Foundation
+import MeshCore
 
 /// Manages BLE connections using an explicit state machine.
 ///
@@ -35,6 +36,12 @@ actor BLEStateMachine: BLEStateMachineProtocol {
   // MARK: - State
 
   var phase: BLEPhase = .idle
+  var motaRequest: CBCharacteristic?
+  var motaResponse: CBCharacteristic?
+  var motaSetup: CheckedContinuation<AsyncThrowingStream<Data, Error>, Error>?
+  var motaSetupTimeout: Task<Void, Never>?
+  var motaGeneration: UInt64 = 0
+  let motaWriteSerializer = RequestResponseSerializer()
 
   /// Tracks when the current phase started (for timing diagnostics)
   var phaseStartTime: Date = .init()
@@ -693,7 +700,7 @@ actor BLEStateMachine: BLEStateMachineProtocol {
 
   /// Serializes concurrent writes by waiting for any pending write to complete,
   /// then claims the write slot and issues the BLE write.
-  private func claimWriteSlot(data: Data) async throws {
+  func claimWriteSlot(data: Data, characteristic: CBCharacteristic? = nil) async throws {
     let myGeneration = connectionGeneration
     while true {
       guard connectionGeneration == myGeneration else {
@@ -744,6 +751,10 @@ actor BLEStateMachine: BLEStateMachineProtocol {
           continuation.resume(throwing: BLEError.notConnected)
           return
         }
+        if let characteristic, characteristic !== motaResponse {
+          continuation.resume(throwing: BLEError.notConnected)
+          return
+        }
 
         self.writeSequenceNumber += 1
         let currentSeq = self.writeSequenceNumber
@@ -752,7 +763,7 @@ actor BLEStateMachine: BLEStateMachineProtocol {
         // Record the sequence before issuing the write so didWriteValue
         // can tag its callback with the originating write
         self.delegateHandler.recordIssuedWriteSequence(currentSeq)
-        currentPeripheral.writeValue(data, for: currentTx, type: .withResponse)
+        currentPeripheral.writeValue(data, for: characteristic ?? currentTx, type: .withResponse)
 
         // Cancel any previous timeout task and create a new one
         let seq = self.pendingWriteSequence
@@ -1134,6 +1145,7 @@ extension BLEStateMachine {
 
     case let .connected(_, _, _, dataContinuation):
       rssiKeepaliveTask?.cancel()
+      closeMotaChannel()
       rssiKeepaliveTask = nil
       consecutiveRSSIFailures = 0
       // Phase exit from `.connected` must drop the session-live signal so a

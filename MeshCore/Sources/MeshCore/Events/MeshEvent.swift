@@ -51,6 +51,9 @@ public enum MeshEvent: Sendable {
   /// - Parameter value: An optional success value returned by the command.
   case ok(value: UInt32?)
 
+  /// Complete reply to an active, serialized local OTA control request.
+  case otaControlReply(Data)
+
   /// Indicates that a command failed with an error.
   ///
   /// Emitted when a command sent to the device fails.

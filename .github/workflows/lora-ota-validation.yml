@@ -1,0 +1,26 @@
+name: LoRa OTA validation
+
+on:
+  push:
+    branches: [lora-ota]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lora-ota-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift-tests:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Toolchain
+        run: swift --version
+      - name: MeshCore tests
+        run: swift test --package-path MeshCore --no-parallel
+      - name: MC1Services tests
+        run: swift test --package-path MC1Services --no-parallel

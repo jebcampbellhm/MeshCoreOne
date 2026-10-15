@@ -1,6 +1,7 @@
 // BLEStateMachine+CBDelegate.swift
 @preconcurrency import CoreBluetooth
 import Foundation
+import MeshCore
 import os
 
 // MARK: - Delegate Handler
@@ -30,6 +31,16 @@ final class BLEDelegateHandler: NSObject, CBCentralManagerDelegate, CBPeripheral
   /// Lock-protected continuation for yielding received data directly.
   /// Using OSAllocatedUnfairLock ensures thread-safe access from the CBCentralManager queue.
   private let dataContinuationLock = OSAllocatedUnfairLock<AsyncStream<Data>.Continuation?>(initialState: nil)
+  private let motaContinuationLock = OSAllocatedUnfairLock<
+    (UUID, AsyncThrowingStream<Data, Error>.Continuation)?
+  >(initialState: nil)
+
+  func setMotaContinuation(_ value: (UUID, AsyncThrowingStream<Data, Error>.Continuation)?) {
+    motaContinuationLock.withLock {
+      $0?.1.finish(throwing: BLEError.notConnected)
+      $0 = value
+    }
+  }
 
   /// FIFO of sequence numbers for `.withResponse` writes issued but not yet
   /// acknowledged. CoreBluetooth delivers exactly one `didWriteValueFor` per
@@ -127,6 +138,20 @@ final class BLEDelegateHandler: NSObject, CBCentralManagerDelegate, CBPeripheral
   }
 
   func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    if characteristic.uuid == CBUUID(string: CompanionOTAProtocol.requestUUID) {
+      motaContinuationLock.withLock { channel in
+        guard let (deviceID, continuation) = channel, deviceID == peripheral.identifier else { return }
+        if let error {
+          continuation.finish(throwing: error)
+        } else if let data = characteristic.value {
+          if case .dropped = continuation.yield(data) {
+            continuation.finish(throwing: MotaError.invalidFrame)
+          }
+        }
+      }
+      return
+    }
+    guard characteristic.uuid == CBUUID(string: BLEServiceUUID.rxCharacteristic) else { return }
     // Yield data directly to preserve ordering from the serial CBCentralManager queue.
     // Do not spawn a Task here - that breaks ordering guarantees.
     if let error {

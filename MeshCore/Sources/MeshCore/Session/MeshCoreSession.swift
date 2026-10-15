@@ -83,6 +83,9 @@ public actor MeshCoreSession: MeshCoreSessionProtocol {
   let clock: any Clock<Duration>
   let dispatcher = EventDispatcher()
   let requestResponseSerializer = RequestResponseSerializer()
+  var otaReplyCommand: UInt8?
+  var otaReplyBuffer = Data()
+  var motaSource: MotaSourceSession?
 
   /// Serializes the read-modify-write of the granular "other params" setters. The
   /// inner wire exchanges already serialize on requestResponseSerializer, but a
@@ -262,6 +265,9 @@ public actor MeshCoreSession: MeshCoreSessionProtocol {
   ///   down a superseded session while a newer reconnect cycle (or an OS-level
   ///   pending connect) still rides on the same transport.
   public func stop(disconnectTransport: Bool = true) async {
+    prepareOTAReply(for: nil)
+    await motaSource?.stop()
+    motaSource = nil
     logger.info("Stopping MeshCore session...")
     isRunning = false
     stopAutoMessageFetching()
@@ -445,6 +451,8 @@ public actor MeshCoreSession: MeshCoreSessionProtocol {
   /// No reassembly or buffering is needed - we parse each packet directly.
   private func handleReceivedData(_ data: Data) async {
     guard !data.isEmpty else { return }
+
+    if await consumeOTAReply(data) { return }
 
     var event = PacketParser.parse(data)
 

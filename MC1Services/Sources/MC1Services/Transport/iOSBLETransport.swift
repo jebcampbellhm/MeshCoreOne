@@ -3,6 +3,20 @@ import Foundation
 import MeshCore
 import os
 
+extension iOSBLETransport: MotaTransport {
+  func openMotaChannel() async throws -> AsyncThrowingStream<Data, Error> {
+    try await stateMachine.openMotaChannel()
+  }
+
+  func sendMotaResponse(_ frame: Data) async throws {
+    try await stateMachine.sendMotaResponse(frame)
+  }
+
+  func closeMotaChannel() async {
+    await stateMachine.closeMotaChannel()
+  }
+}
+
 /// iOS BLE transport using the BLEStateMachine.
 ///
 /// This is a thin wrapper around `BLEStateMachine` that conforms to `MeshTransport`.
