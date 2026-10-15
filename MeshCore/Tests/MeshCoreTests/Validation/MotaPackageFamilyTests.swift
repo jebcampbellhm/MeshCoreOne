@@ -93,7 +93,7 @@ struct MotaPackageFamilyTests {
 
   private func resign(_ bytes: inout [UInt8], payload: Int, blockSize: Int, full: Bool = true) throws {
     let image = Data(bytes[payload..<(bytes.count - 5)])
-    if full { bytes.replaceSubrange(32..<64, with: SHA256.hash(data: image)) }
+    if full { bytes.replaceSubrange(32..<64, with: Array(SHA256.hash(data: image))) }
     let leaves = stride(from: 0, to: image.count, by: blockSize).map {
       MotaContainer.shortHash(image.subdata(in: $0..<min($0 + blockSize, image.count)))
     }
