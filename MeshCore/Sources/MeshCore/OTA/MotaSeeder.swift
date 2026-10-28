@@ -2,10 +2,18 @@ import Foundation
 
 /// Stateless, bounded request handler over one immutable verified image.
 public struct MotaSeeder: Sendable {
-  public let container: MotaContainer
+  public let containers: [MotaContainer]
+  public var container: MotaContainer { containers[0] }
 
   public init(container: MotaContainer) {
-    self.container = container
+    self.containers = [container]
+  }
+
+  public init(containers: [MotaContainer]) throws {
+    guard (1...8).contains(containers.count), Set(containers.map(\.manifestID)).count == containers.count else {
+      throw MotaError.invalidContainer("Choose 1–8 packages with distinct manifest IDs")
+    }
+    self.containers = containers
   }
 
   /// Invalid envelopes are ignored. Valid requests with unsupported operations,
@@ -19,10 +27,11 @@ public struct MotaSeeder: Sendable {
     var payload: Data?
     switch operation {
     case 1 where args.isEmpty:
-      payload = Data([1])
-    case 2 where args == [0]:
-      payload = container.descriptor
-    case 3 where args.count == 7 && args[0] == 0:
+      payload = Data([UInt8(containers.count)])
+    case 2 where args.count == 1 && Int(args[0]) < containers.count:
+      payload = containers[Int(args[0])].descriptor
+    case 3 where args.count == 7 && Int(args[0]) < containers.count:
+      let container = containers[Int(args[0])]
       let offset = Int(MotaWire.uint32(args, 1))
       let length = Int(args[5]) | Int(args[6]) << 8
       if length <= 192, offset <= container.bytes.count, length <= container.bytes.count - offset {

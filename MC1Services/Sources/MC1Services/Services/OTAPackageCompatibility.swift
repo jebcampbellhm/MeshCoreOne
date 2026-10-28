@@ -26,8 +26,16 @@ enum OTAPackageCompatibility {
           codecs & (UInt16(1) << package.codec) != 0 else {
       throw LoRaOTAError.message("Repeater bootloader ABI, codec mask, or maximum block size does not support this package.")
     }
-    // This workflow targets the user's SD-equipped MeshTower, including deltas.
-    guard storage.hasPrefix("OTA storage: SD staging;") else {
+    // Fixed SD builds route `ota storage` to the QSPI-only diagnostic. Their
+    // status and self replies instead identify the SD backend and apply support.
+    // Accept only that exact unsupported-command reply, never an actual media
+    // error or an adaptive store selecting internal flash. The receiver still
+    // checks SD availability when it opens the receive slot for the pull.
+    let fixedSD = storage.trimmingCharacters(in: .whitespacesAndNewlines)
+      == "ERR this build does not use a QSPI OTA store"
+      && fields(#"\bbl:([^ |]+)"#, in: status)?.first == "SD"
+      && fields(#"\bbootloader: SD apply OK \(abi=\d+ codecs=0x[0-9A-Fa-f]+\)"#, in: identity) != nil
+    guard storage.hasPrefix("OTA storage: SD staging;") || fixedSD else {
       throw LoRaOTAError.message("Mounted SD staging and a compatible OTAFIX bootloader are required. \(storage)")
     }
     if package.kind == .deltaApplication {

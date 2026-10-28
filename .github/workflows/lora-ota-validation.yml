@@ -51,20 +51,7 @@ jobs:
         run: |
           printf 'settings:\n  base:\n    DEVELOPMENT_TEAM: ""\n' > dev.yml
           xcodegen generate
-      - name: Use older-OS swipe fallback when hosted SDK predates iOS 27
-        run: |
-          SDK_VERSION=$(xcrun --sdk iphonesimulator --show-sdk-version)
-          if [ "${SDK_VERSION%%.*}" -lt 27 ]; then
-            echo "::warning::Compatibility build on iOS $SDK_VERSION SDK; upstream swipeActionsContainer requires iOS 27 SDK. Only this CI checkout uses the existing older-OS fallback."
-            python3 - <<'PY'
-          from pathlib import Path
-          path = Path('MC1/Views/Components/SwipeActionsContainer.swift')
-          source = path.read_text()
-          assert source.count('      swipeActionsContainer()') == 1
-          path.write_text(source.replace('      swipeActionsContainer()', '      self'))
-          PY
-          fi
-      - name: Build iOS simulator app (hosted SDK compatibility)
+      - name: Build iOS simulator app
         run: xcodebuild build -project MC1.xcodeproj -scheme MC1 -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
   swift-tests:
     runs-on: macos-latest

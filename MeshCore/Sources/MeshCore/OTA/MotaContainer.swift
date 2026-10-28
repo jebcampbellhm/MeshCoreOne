@@ -31,6 +31,17 @@ public struct MotaContainer: Sendable {
   public static let maximumSize = 2 * 1024 * 1024
 
   public init(data: Data) throws {
+    try self.init(data: data, archiveOnly: false)
+  }
+
+  /// Verifies signed container integrity for storage/serving across hardware.
+  /// This is not installation approval; callers must validate the destination
+  /// separately before staging or constructing an install command.
+  public init(archiveData: Data) throws {
+    try self.init(data: archiveData, archiveOnly: true)
+  }
+
+  private init(data: Data, archiveOnly: Bool) throws {
     guard (210...Self.maximumSize).contains(data.count) else {
       throw MotaError.invalidContainer("Invalid container size")
     }
@@ -116,7 +127,7 @@ public struct MotaContainer: Sendable {
     self.blockSize = blockSize
     self.payloadOffset = payloadOffset
     self.payloadSize = payloadSize
-    if kind == .bootloader { try validateMeshTowerBootloader() }
+    if kind == .bootloader && !archiveOnly { try validateMeshTowerBootloader() }
   }
 
   /// Additional identity and embedded-image checks for the first supported board.

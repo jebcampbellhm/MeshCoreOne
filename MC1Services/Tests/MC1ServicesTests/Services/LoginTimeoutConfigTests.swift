@@ -103,4 +103,18 @@ struct LoginTimeoutConfigTests {
 
     #expect(timeout == .seconds(10))
   }
+  @Test(arguments: [UInt32(1000), UInt32(20000)])
+  func `CLI timeout policy honors full OTA budget`(firmwareMs: UInt32) {
+    let timeout = RemoteOperationTimeoutPolicy.cliTimeout(
+      for: makeSentInfo(timeoutMs: firmwareMs), requestedTimeout: .seconds(30))
+    #expect(timeout == .seconds(30))
+  }
+
+  @Test
+  func `CLI extended timeout remains bounded`() {
+    let timeout = RemoteOperationTimeoutPolicy.cliTimeout(
+      for: makeSentInfo(timeoutMs: 60000), requestedTimeout: .seconds(60))
+    #expect(timeout == .seconds(30))
+  }
+
 }

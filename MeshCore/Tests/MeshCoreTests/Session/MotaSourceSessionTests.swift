@@ -4,6 +4,18 @@ import Testing
 
 @Suite("Bluetooth mOTA source lifecycle", .timeLimit(.minutes(1)))
 struct MotaSourceSessionTests {
+  @Test(arguments: [UInt8(0), 2, 4, 255])
+  func compatibilityProbeDoesNotAttachOrOpenChannel(flags: UInt8) async throws {
+    let transport = SeederTestTransport(statusFlags: flags)
+    let session = MeshCoreSession(transport: transport)
+    try await session.start()
+    if flags == 0 { try await session.verifyMotaSupport() }
+    else { await #expect(throws: (any Error).self) { try await session.verifyMotaSupport() } }
+    #expect(await !transport.channelOpen)
+    #expect(await !transport.enumerationAnswered)
+    await session.stop()
+  }
+
   @Test func answersEnumerationBeforeStartCompletesAndClosesOnStop() async throws {
     let transport = SeederTestTransport()
     let session = MeshCoreSession(transport: transport)
@@ -41,7 +53,9 @@ private actor SeederTestTransport: MotaTransport {
   private(set) var channelOpen = false
   private(set) var enumerationAnswered = false
 
-  init() {
+  let statusFlags: UInt8
+  init(statusFlags: UInt8 = 0) {
+    self.statusFlags = statusFlags
     (stream, continuation) = AsyncStream<Data>.makeStream()
   }
 
@@ -66,7 +80,8 @@ private actor SeederTestTransport: MotaTransport {
       reply.append(Data("Mota test".utf8))
       continuation.yield(reply)
     } else if data == Data([0x4B, 0]) {
-      continuation.yield(Data([0, 0, channelOpen ? 1 : 0, 0, 0, 0, 0]))
+      if statusFlags == 255 { continuation.yield(Data([1, 1])) }
+      else { continuation.yield(Data([0, 0, channelOpen ? 1 : statusFlags, 0, 0, 0, 0])) }
     } else if data == Data([0x4B, 1]) {
       // No START reply until the host supplies a catalog response.
       requests?.yield(Data([0x4D, 0x53, 1, 1]))

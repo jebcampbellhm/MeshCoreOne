@@ -1,12 +1,23 @@
 import Foundation
 
 public extension MeshCoreSession {
+  /// Non-mutating capability probe; does not subscribe, attach a source, or retune.
+  func verifyMotaSupport() async throws {
+    guard transport is any MotaTransport else { throw MotaError.unsupported }
+    let status = try await controlMotaSource(.status)
+    guard !status.attached, !status.anotherLinkActive else { throw MotaError.sourceBusy }
+  }
+
   /// Starts serving a validated file. The returned session must be stopped when
   /// transfer ends. This does not change radio settings or initiate installation.
   func startMotaSource(container: MotaContainer) async throws -> MotaSourceSession {
+    try await startMotaSource(containers: [container])
+  }
+
+  func startMotaSource(containers: [MotaContainer]) async throws -> MotaSourceSession {
     guard motaSource == nil else { throw MotaError.sourceBusy }
     guard let channel = transport as? any MotaTransport else { throw MotaError.unsupported }
-    let source = MotaSourceSession(session: self, transport: channel, container: container)
+    let source = try MotaSourceSession(session: self, transport: channel, containers: containers)
     motaSource = source
     do {
       try await source.start()

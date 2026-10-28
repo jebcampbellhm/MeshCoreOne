@@ -30,6 +30,7 @@ scripts/
 !/scripts/
 /scripts/*
 !/scripts/test-app-ci.py
+!/scripts/fetch-ota-logs.sh
 !/scripts/tests/
 /scripts/tests/*
 !/scripts/tests/test_app_ci.py

@@ -146,7 +146,7 @@ extension ChatCoordinator {
         }
       }
     } onCancel: { [weak self] in
-      Task { @MainActor in
+      Task { @MainActor [weak self] in
         self?.finishScrollRenderWait(token: token)
       }
     }

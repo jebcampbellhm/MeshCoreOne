@@ -117,12 +117,20 @@ extension RemoteNodeService {
   }
 
   /// OTA mutations must never be replayed after an ambiguous radio timeout.
+  public func sendSingleCLICommand(sessionID: UUID, command: String) async throws -> String {
+    let response = try await performCLICommand(sessionID: sessionID, command: command,
+      timeout: .seconds(30), acceptsAnyResponse: true, allowRecovery: false)
+    await handlePasswordChangeIfNeeded(command: command, sessionID: sessionID)
+    return response
+  }
+
+  /// OTA mutations must never be replayed after an ambiguous radio timeout.
   public func sendOTACommand(sessionID: UUID, command: String) async throws -> String {
     guard command.hasPrefix("ota ") || command.hasPrefix("tempradio ") || command == "normalradio" else {
       throw RemoteNodeError.permissionDenied
     }
     return try await performCLICommand(sessionID: sessionID, command: command,
-      timeout: .seconds(20), acceptsAnyResponse: true, allowRecovery: false)
+      timeout: .seconds(30), acceptsAnyResponse: true, allowRecovery: false)
   }
 
   /// Sends a Radio CLI command to a chat contact. The contact runs it only after granting this radio Remote CLI.

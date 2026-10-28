@@ -57,7 +57,7 @@ def pinned_test_host(rows):
         if len(matches) != 1:
             return None
         app = capture(["xcrun", "simctl", "get_app_container", matches[0],
-                       "io.pocketmeshtest.app", "app"]).strip()
+                       "com.jebcampbellhm.mc1ota", "app"]).strip()
         executable = f"{app}/MC1"
         hosts = [pid for pid, _, _, command in rows
                  if f"/Devices/{matches[0]}/" in executable

@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 @ToolbarContentBuilder
 func bleStatusToolbarItem(placement: ToolbarItemPlacement = .topBarLeading) -> some ToolbarContent {
+  #if compiler(>=6.4)
   if #available(iOS 27, *) {
     ToolbarItem(placement: placement) {
       BLEStatusIndicatorView()
@@ -15,4 +16,9 @@ func bleStatusToolbarItem(placement: ToolbarItemPlacement = .topBarLeading) -> s
       BLEStatusIndicatorView()
     }
   }
+  #else
+  ToolbarItem(placement: placement) {
+    BLEStatusIndicatorView()
+  }
+  #endif
 }

@@ -10,10 +10,10 @@ public actor MotaSourceSession {
   public private(set) var failure: String?
   public private(set) var responsesSent = 0
 
-  init(session: MeshCoreSession, transport: any MotaTransport, container: MotaContainer) {
+  init(session: MeshCoreSession, transport: any MotaTransport, containers: [MotaContainer]) throws {
     self.session = session
     self.transport = transport
-    self.seeder = MotaSeeder(container: container)
+    self.seeder = try MotaSeeder(containers: containers)
   }
 
   func start() async throws {
@@ -38,7 +38,7 @@ public actor MotaSourceSession {
         throw MotaError.sourceBusy
       }
       let started = try await session.controlMotaSource(.start)
-      guard !stopping, failure == nil, started.attached, started.offered == 1 else {
+      guard !stopping, failure == nil, started.attached, started.offered == seeder.containers.count else {
         throw MotaError.invalidFrame
       }
     } catch {

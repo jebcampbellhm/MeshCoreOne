@@ -16,6 +16,11 @@ struct RepeaterSettingsView: View {
   @State private var showRebootConfirmation = false
   @State private var showingLocationPicker = false
   @State private var showingLoRaOTA = false
+  @State private var showingDistribution = false
+  @State private var showingCommandBatch = false
+  @State private var checkingLoRaOTA = false
+  @State private var loRaOTAError: String?
+  @State private var showingLoRaOTAError = false
   @State private var addRegionParent: RepeaterRegionEntry.Parent?
   @State private var telemetryConfigured = false
   @State private var contacts: [ContactDTO] = []
@@ -109,6 +114,14 @@ struct RepeaterSettingsView: View {
       Text(viewModel.helper.successMessage ?? L10n.RemoteNodes.RemoteNodes.Settings.settingsApplied)
     }
     .sheet(isPresented: $showingLoRaOTA) { LoRaOTAView(session: session) }
+    .sheet(isPresented: $showingDistribution) { OTADistributionView(destination: session) }
+    .sheet(isPresented: $showingCommandBatch) { RepeaterCommandBatchView(session: session) }
+    .alert("LoRa transfer unavailable", isPresented: $showingLoRaOTAError) {
+      Button("OK", role: .cancel) {}
+      Link("Full companion firmware", destination: URL(string: "https://mikecarper.github.io/MeshCore/")!)
+    } message: {
+      Text(loRaOTAError ?? "Unable to verify companion OTA support.")
+    }
     .sheet(isPresented: $showingLocationPicker) {
       LocationPickerView(
         initialCoordinate: CLLocationCoordinate2D(
@@ -147,7 +160,13 @@ struct RepeaterSettingsView: View {
       makeActionsSection()
       if session.isAdmin {
         Section("Firmware") {
-          Button("LoRa firmware transfer") { showingLoRaOTA = true }
+          Button("Distribute OTA packages through relays") { showingDistribution = true }
+          Button("Setup commands") { showingCommandBatch = true }
+          Button(checkingLoRaOTA ? "Checking companion…" : "LoRa firmware transfer") { checkLoRaOTA() }
+            .disabled(checkingLoRaOTA)
+          Text("Requires full companion firmware from mikecarper.github.io/MeshCore with Bluetooth MOTA support.")
+            .font(.footnote)
+          Link("Full companion firmware", destination: URL(string: "https://mikecarper.github.io/MeshCore/")!)
         }
       }
       if let routeContact {
@@ -172,6 +191,27 @@ struct RepeaterSettingsView: View {
   }
 
   // MARK: - Subviews
+
+  private func checkLoRaOTA() {
+    checkingLoRaOTA = true
+    Task {
+      defer { checkingLoRaOTA = false }
+      do {
+        guard let services = appState.services,
+              appState.connectedDevice?.radioID == session.radioID else {
+          throw LoRaOTAError.message("Connect the companion used for this repeater session.")
+        }
+        try await LoRaOTAWorkflow.verifyCompanion(session: services.session)
+        guard appState.connectedDevice?.radioID == session.radioID else {
+          throw LoRaOTAError.message("The connected companion changed. Try again.")
+        }
+        showingLoRaOTA = true
+      } catch {
+        loRaOTAError = "Requires full companion firmware from mikecarper.github.io/MeshCore with Bluetooth MOTA support. Check that the companion is connected and no other MOTA source is active.\n\n\(error.localizedDescription)"
+        showingLoRaOTAError = true
+      }
+    }
+  }
 
   private func makeDeviceInfoSection() -> some View {
     NodeDeviceInfoSection(settings: viewModel.helper)
