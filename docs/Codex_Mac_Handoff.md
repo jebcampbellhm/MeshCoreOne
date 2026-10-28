@@ -4,6 +4,18 @@ Updated October 28, 2026. Repository: https://github.com/jebcampbellhm/MeshCoreO
 Branch and GitHub default: `lora-ota`. Implementation validated at `370df4e1`;
 validation documentation recorded at `9f9cb494`.
 
+## Upstream tracking policy (October 28, 2026)
+
+Use `upstream/main` (stable releases) for future upstream merges. Keep our
+application work on `lora-ota`, tracking `origin/lora-ota` for pushes and pulls.
+Do not merge `upstream/dev` unless explicitly requested. Preserve the already
+merged development changes through `f1bdec0f` (1.6.2); do not downgrade to stable
+1.6.1 or discard MC1OTA features while waiting for stable to catch up.
+
+For the next upstream update, fetch upstream and inspect/merge `upstream/main`,
+then run relevant tests and build before installing. The October 28 fetch found
+no newer development changes; a fresh signed generic-iOS build passed.
+
 ## User intent and current scope
 
 Build MeshCore One for the user's iPhone, then validate signed full application,
